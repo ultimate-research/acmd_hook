@@ -1,5 +1,5 @@
 [package]
-name = "skyline_rs_template"
+name = "acmd_hook"
 version = "0.1.0"
 authors = ["jam1garner <jam1.mcleod@hotmail.com>"]
 edition = "2018"
@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 skyline = { git = "https://github.com/ultimate-research/skyline-rs.git" }
 skyline_smash = { git = "https://github.com/ultimate-research/skyline-smash.git" }
+parking_lot = { version = "0.10", features = ["nightly"] }
 
 [profile.dev]
 panic = "abort"

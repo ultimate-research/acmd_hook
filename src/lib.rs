@@ -1,30 +1,40 @@
 #![feature(proc_macro_hygiene)]
 
-use skyline::{hook, install_hook};
+use smash::lib::L2CValue;
+use smash::lua2cpp::L2CFighterCommon;
+use parking_lot::RwLock;
 
-extern "C" fn test() -> u32 {
-    2
+type Callback = fn(&mut L2CFighterCommon);
+
+static HOOKS: RwLock<Vec<Callback>> = RwLock::new(Vec::new());
+
+#[skyline::hook(replace = smash::lua2cpp::L2CFighterCommon_sys_line_system_control_fighter)]
+pub unsafe fn sys_line_system_control_fighter_hook(fighter: &mut L2CFighterCommon) -> L2CValue {
+    for hook in HOOKS.read().iter() {
+        hook(fighter)
+    }
+
+    original!()(fighter)
 }
 
-#[hook(replace = test)]
-fn test_replacement() -> u32 {
 
-    let original_test = original!();
-
-    let val = original_test();
-
-    println!("[override] original value: {}", val); // 2
-
-    val + 1
+fn nro_main(nro: &skyline::nro::NroInfo) {
+    match nro.name {
+        "common" => {
+            skyline::install_hook!(sys_line_system_control_fighter_hook);
+        }
+        _ => (),
+    }
 }
 
-#[skyline::main(name = "skyline_rs_template")]
+#[skyline::main(name = "acmd_hook")]
 pub fn main() {
-    println!("Hello from Skyline Rust Plugin!");
+    skyline::nro::add_hook(nro_main).unwrap();
+}
 
-    install_hook!(test_replacement);
+#[no_mangle]
+pub extern "Rust" fn add_acmd_load_hook(callback: Callback) {
+    let mut hooks = HOOKS.write();
 
-    let x = test();
-
-    println!("[main] test returned: {}", x); // 3
+    hooks.push(callback);
 }
