@@ -1,15 +1,16 @@
 #![feature(proc_macro_hygiene)]
 
 use smash::lib::L2CValue;
-use smash::lua2cpp::L2CFighterCommon;
-use smash::lua2cpp::L2CAgentBase;
+use smash::lua2cpp::{L2CAgentBase, L2CFighterBase, L2CFighterCommon, L2CWeaponCommon};
 use smash::phx::Hash40;
 use parking_lot::RwLock;
 
 type Callback = fn(&mut L2CFighterCommon);
+type WeaponCallback = fn(&mut L2CFighterBase);
 type Predicate = unsafe fn(&mut L2CAgentBase, Hash40) -> bool;
 
 static HOOKS: RwLock<Vec<Callback>> = RwLock::new(Vec::new());
+static WEAPON_HOOKS: RwLock<Vec<WeaponCallback>> = RwLock::new(Vec::new());
 static PREDS: RwLock<Vec<Predicate>> = RwLock::new(Vec::new());
 
 #[skyline::hook(replace = smash::lua2cpp::L2CFighterCommon_sys_line_system_control_fighter)]
@@ -19,6 +20,15 @@ pub unsafe fn sys_line_system_control_fighter_hook(fighter: &mut L2CFighterCommo
     }
 
     original!()(fighter)
+}
+
+#[skyline::hook(replace = smash::lua2cpp::L2CFighterBase_sys_line_system_control)]
+pub unsafe fn sys_line_system_control_hook(fighter_base: &mut L2CFighterBase) -> L2CValue {
+    for hook in WEAPON_HOOKS.read().iter() {
+        hook(fighter_base)
+    }
+
+    original!()(fighter_base)
 }
 
 #[skyline::hook(replace = smash::lua2cpp::L2CAgentBase_call_coroutine)]
@@ -40,8 +50,10 @@ pub unsafe fn call_coroutine_hook(
 fn nro_main(nro: &skyline::nro::NroInfo) {
     match nro.name {
         "common" => {
-            skyline::install_hook!(sys_line_system_control_fighter_hook);
-            skyline::install_hook!(call_coroutine_hook);
+            skyline::install_hooks!(
+                sys_line_system_control_hook,
+                sys_line_system_control_fighter_hook,
+                call_coroutine_hook);
         }
         _ => (),
     }
@@ -58,5 +70,14 @@ pub extern "Rust" fn add_acmd_load_hook(hook: Callback, predicate: Predicate) {
     let mut preds = PREDS.write();
 
     hooks.push(hook);
+    preds.push(predicate);
+}
+
+#[no_mangle]
+pub extern "Rust" fn add_acmd_load_weapon_hook(hook: WeaponCallback, predicate: Predicate) {
+    let mut weapon_hooks = WEAPON_HOOKS.write();
+    let mut preds = PREDS.write();
+
+    weapon_hooks.push(hook);
     preds.push(predicate);
 }
